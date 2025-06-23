@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/fy1316/gitlab-fork-cli/pkg/k8sutil"
+	"go.uber.org/zap"
 	"log"
 	"net/http"
 	"os"
@@ -30,8 +32,8 @@ var listProjectsCmd = &cobra.Command{
   gitlab-fork-cli list-projects --group my-prod --token <your_token> --visibility public`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// 检查必填参数
-		if listGroup == "" || listToken == "" {
-			fmt.Println("❌ 错误: 缺少必要的命令行参数 (--group 和 --token)。")
+		if listGroup == "" {
+			fmt.Println("❌ 错误: 缺少必要的命令行参数 (--group)。")
 			cmd.Help()
 			os.Exit(1)
 		}
@@ -47,10 +49,21 @@ var listProjectsCmd = &cobra.Command{
 				log.Fatalf("❌ 错误: 无效的可见性参数 '%s'。有效值: public, private, internal。", listVisibility)
 			}
 		}
-
+		kubeRestConfig, err := k8sutil.GetKubeConfig()
+		if err != nil {
+			log.Fatalf("❌ 无法获取 Kubernetes 配置，无法检查命名空间或获取 Secret。错误: %v\n", err)
+		}
+		token, err := k8sutil.GetSecretValue(kubeRestConfig, "kubeflow", GitlabSecretName, GitlabTokenKey)
+		//token, err := getTokenFromSecret(listGroup, GitlabSecretName, GitlabTokenKey)
+		if err != nil {
+			log.Fatal("❌ 无法获取开发令牌。请确认输入的 group 对应的 Secret 存在且可访问。",
+				zap.String("group", sourceGroup),
+				zap.Error(err))
+		}
 		// 1. 创建 GitLab 客户端
-		fmt.Printf("ℹ️ 正在创建 GitLab 客户端 (%s)...\n", baseURL)
-		git, err := newGitLabClient(listToken, baseURL, insecureSkip)
+
+		log.Printf("ℹ️ 正在创建 GitLab 客户端 (%s)...\n", baseURL)
+		git, err := newGitLabClient(token, baseURL, insecureSkip)
 		if err != nil {
 			log.Fatalf("❌ %v", err)
 		}
@@ -72,7 +85,7 @@ var listProjectsCmd = &cobra.Command{
 			}
 		}
 
-		fmt.Printf("🚀 正在获取组 '%s' 下的项目 (可见性: %s)...\n", listGroup, func() string {
+		log.Printf("🚀 正在获取组 '%s' 下的项目 (可见性: %s)...\n", listGroup, func() string {
 			if listVisibility == "" {
 				return "所有"
 			}
@@ -100,36 +113,36 @@ var listProjectsCmd = &cobra.Command{
 
 		// 4. 打印项目信息
 		if len(allProjects) == 0 {
-			fmt.Printf("ℹ️ 组 '%s' (可见性: %s) 下没有找到任何项目。\n", listGroup, func() string {
+			log.Printf("ℹ️ 组 '%s' (可见性: %s) 下没有找到任何项目。\n", listGroup, func() string {
 				if listVisibility == "" {
 					return "所有"
 				}
 				return listVisibility
 			}())
 		} else {
-			fmt.Printf("\n🎉 组 '%s' (可见性: %s) 下的项目列表 (%d 个):\n", listGroup, func() string {
+			log.Printf("\n🎉 组 '%s' (可见性: %s) 下的项目列表 (%d 个):\n", listGroup, func() string {
 				if listVisibility == "" {
 					return "所有"
 				}
 				return listVisibility
 			}(), len(allProjects))
 			for i, p := range allProjects {
-				fmt.Printf("  %d. %s (ID: %d, 路径: %s, 可见性: %s)\n",
+				log.Printf("  %d. %s (ID: %d, 路径: %s, 可见性: %s)\n",
 					i+1, p.NameWithNamespace, p.ID, p.PathWithNamespace, p.Visibility)
 			}
 		}
 
-		fmt.Println("\n✅ 操作完成。")
+		log.Println("✅ 操作完成。")
 	},
 }
 
 func init() {
 	// 定义 list-projects 命令的本地标志
-	listProjectsCmd.Flags().StringVarP(&listGroup, "group", "g", "", "要列出项目的 GitLab 组的路径或 ID (必填)")
-	listProjectsCmd.Flags().StringVarP(&listToken, "token", "t", "", "用于访问 GitLab API 的个人访问令牌 (必填)")
+	listProjectsCmd.Flags().StringVarP(&listGroup, "group", "g", "", "项目 NS 的名称")
+	//listProjectsCmd.Flags().StringVarP(&listToken, "token", "t", "", "用于访问 GitLab API 的个人访问令牌")
 	listProjectsCmd.Flags().StringVarP(&listVisibility, "visibility", "v", "", "可选: 按可见性筛选项目 (public, private, internal)")
 
 	// 标记这些标志为必填
 	listProjectsCmd.MarkFlagRequired("group")
-	listProjectsCmd.MarkFlagRequired("token")
+	//listProjectsCmd.MarkFlagRequired("token")
 }
