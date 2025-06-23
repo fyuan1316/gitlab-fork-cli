@@ -24,7 +24,12 @@ var (
 const (
 	GitlabSecretName = "aml-image-builder-secret"
 	GitlabTokenKey   = "MODEL_REPO_GIT_TOKEN"
+	amlModelsGroup   = "amlmodels"
 )
+
+func getModelGroupByNs(ns string) string {
+	return ns + "/" + amlModelsGroup
+}
 
 // newGitLabClient 封装了 GitLab 客户端的创建逻辑
 func newGitLabClient(token, baseURL string, insecureSkipVerify bool) (*gitlab.Client, error) {
@@ -166,7 +171,7 @@ var forkCmd = &cobra.Command{
 
 		// 9. Check if a project with the same name already exists in the target group
 		log.Printf("ℹ️ 正在检查目标组 '%s' 中是否已存在同名项目 '%s'...\n", targetGroup, sourceProject)
-		existingProjectID, err := findProjectInGroup(prodGit, targetGroup, sourceProject)
+		existingProjectID, err := findProjectInGroup(prodGit, getModelGroupByNs(targetGroup), sourceProject)
 		if err == nil {
 			log.Fatalf("❌ 目标组 '%s' 中已存在同名项目 '%s' (ID: %d)。请手动处理或更改目标项目名称。\n",
 				targetGroup, sourceProject, existingProjectID)
@@ -196,7 +201,7 @@ var forkCmd = &cobra.Command{
 			sourceProject, sourceProjectID, targetGroup)
 
 		forkOptions := &gitlab.ForkProjectOptions{
-			Namespace: gitlab.Ptr(targetGroup), // Ensure forking to the correct group
+			Namespace: gitlab.Ptr(getModelGroupByNs(targetGroup)), // Ensure forking to the correct group
 		}
 
 		// Use prodGit for the fork operation as it has the necessary permissions for the target group
