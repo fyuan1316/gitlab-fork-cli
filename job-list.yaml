@@ -1,0 +1,74 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: promote-job
+  namespace: fy-prod
+spec:
+  template:
+    spec:
+      containers:
+        - name: app-runner
+          image: 152-231-registry.alauda.cn:60070/test/gitlab-fork-cli:v0.1
+          command:
+            - /root/gitlab-fork-cli
+          args:
+            - list-projects
+            - -g
+            - fy-prod
+            - -k
+      restartPolicy: Never
+      serviceAccountName: promote-sa
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: promote-sa
+  namespace: fy-prod
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: promote-secret-reader
+  namespace: fy-prod
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: aml-builder-sa-fy-prod-secret-reader
+  namespace: fy-prod # 绑定也必须在 fy-prod 命名空间
+subjects:
+  - kind: ServiceAccount
+    name: promote-sa
+    namespace: fy-prod
+roleRef:
+  kind: Role
+  name: promote-secret-reader
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: aml-builder-sa-kubeflow-secret-reader
+  namespace: kubeflow
+subjects:
+  - kind: ServiceAccount
+    name: promote-sa
+    namespace: fy-prod # 指定 ServiceAccount 的实际命名空间
+roleRef:
+  kind: Role
+  name: kubeflow-secret-reader
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: kubeflow-secret-reader
+  namespace: kubeflow
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch"]

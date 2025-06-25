@@ -19,7 +19,7 @@ COPY . .
 # CGO_ENABLED=0: Disables CGO, which makes the binary statically linked and easier to run on minimal images
 # GOOS=linux: Ensures the binary is built for Linux (the OS of our final image)
 # GOARCH=amd64: Ensures the binary is built for AMD64 architecture
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /app/gitlab-fork-cli ./cmd
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /app/gitlab-fork-cli .
 
 # Stage 2: Create a minimal runtime image
 # Using alpine is a good balance between small size and having common utilities if needed.
