@@ -29,57 +29,59 @@ var cloneCmd = &cobra.Command{
 支持指定分支或标签，并可提供个人访问令牌进行认证。
 克隆完成后，将包含一个模型下载的占位符。`,
 	Run: func(cmd *cobra.Command, args []string) {
-		tag, branch := "1.0.0", "main"
-		t, err := checkRemoteRefExistence(repoURL, "1.0.0", "main", "glpat-Uou_WTfqMyWn9wyZ_HNX")
+		tag, branch := gitRef, gitRef
+		// "glpat-Uou_WTfqMyWn9wyZ_HNX"
+		t, err := checkRemoteRefExistence(repoURL, tag, branch, gitToken)
 		fmt.Printf("ref type= %v", t)
 
 		cloneOptions := &git.CloneOptions{
 			URL:             repoURL,
 			Progress:        os.Stdout,
-			InsecureSkipTLS: true, //
+			InsecureSkipTLS: true,
 			Depth:           1,
-		}
-
-		if t == 1 {
-			//refName := plumbing.NewTagReferenceName(tag)
-
-		} else if t == 2 {
-			//refName := plumbing.NewBranchReferenceName(branch)
-			cloneOptions.SingleBranch = true
-		}
-
-		//url, directory, token := os.Args[1], os.Args[2], os.Args[3]
-		directory := "/tmp/test1"
-		// Clone the given repository to the given directory
-		fmt.Printf("git clone %s %s", repoURL, directory)
-
-		r, err := git.PlainClone(directory, &git.CloneOptions{
-			// The intended use of a GitHub personal access token is in replace of your password
-			// because access tokens can easily be revoked.
-			// https://help.github.com/articles/creating-a-personal-access-token-for-the-command-line/
 			Auth: &http.BasicAuth{
 				Username: "oauth2",
 				Password: gitToken,
 			},
-			InsecureSkipTLS: true,
-			URL:             repoURL,
-			Progress:        os.Stdout,
-		})
+			SingleBranch: true,
+		}
+
+		if t == 1 {
+			cloneOptions.ReferenceName = plumbing.NewTagReferenceName(tag)
+		} else if t == 2 {
+			cloneOptions.ReferenceName = plumbing.NewBranchReferenceName(branch)
+		}
+
+		directory := "/tmp/test1"
+		// Clone the given repository to the given directory
+		fmt.Printf("git clone %s %s", repoURL, directory)
+
+		r, err := git.PlainClone(directory, cloneOptions)
 		if err != nil {
 			log.Fatalf("plainclone err: %v", err)
 		}
 
-		// ... retrieving the branch being pointed by HEAD
-		ref, err := r.Head()
+		// push到目标，这里需要检查是err 返回 repo 不存在的情况，提示给用户
+
+		gitTarget, err := r.CreateRemote(&config.RemoteConfig{
+			Name: "target",
+			URLs: []string{"https://aml-gitlab.alaudatech.net/fy-prod/amlmodels/iris"},
+		})
+
+		targetToken := "glpat-5QL4aihz5PSymiALe1Uv" //TODO fy
+		err = gitTarget.Push(&git.PushOptions{
+			RemoteName: "target",
+			RefSpecs:   []config.RefSpec{config.RefSpec("refs/tags/*:refs/tags/*")},
+			Auth: &http.BasicAuth{
+				Username: "oauth2",
+				Password: targetToken,
+			},
+			Progress:        os.Stdout,
+			InsecureSkipTLS: true,
+		})
 		if err != nil {
-			log.Fatalf("plainclone err: %v", err)
+			log.Fatalf("push err: %v", err)
 		}
-		// ... retrieving the commit object
-		commit, err := r.CommitObject(ref.Hash())
-		if err != nil {
-			log.Fatalf("plainclone err: %v", err)
-		}
-		fmt.Println(commit)
 	},
 }
 
