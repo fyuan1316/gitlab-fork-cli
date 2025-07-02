@@ -44,4 +44,5 @@ func init() {
 	// 注册子命令 (在 fork.go 中定义)
 	rootCmd.AddCommand(forkCmd)
 	rootCmd.AddCommand(listProjectsCmd)
+	rootCmd.AddCommand(cloneCmd)
 }
